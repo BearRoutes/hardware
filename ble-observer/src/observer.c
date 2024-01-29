@@ -8,18 +8,71 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
+#include <zephyr/bluetooth/conn.h>
+#include <zephyr/sys/byteorder.h> // Include this if sys_get_le16 is declared here
 
 #define NAME_LEN 30
+static uint16_t manufacturer_id = 0;
+static uint8_t manufacturer_data_len = 0;
+static const uint8_t *manufacturer_data = NULL;
+char name[30];
+uint8_t name_len = 0;
+
+static bool parse_advertising_data(struct bt_data *data, void *user_data)
+{
+    char *name = user_data; // Assuming this points to a global or static variable
+    switch (data->type) {
+    case BT_DATA_NAME_COMPLETE:
+    case BT_DATA_NAME_SHORTENED:
+        memcpy(name, data->data, data->data_len);
+        name[data->data_len] = '\0';
+        return true;
+    case BT_DATA_MANUFACTURER_DATA:
+
+        if (data->data_len >= 2) {
+            manufacturer_id = sys_get_le16(data->data);
+            manufacturer_data = &data->data[2];
+            manufacturer_data_len = data->data_len - 2;
+        }
+        return true;
+	
+    default:
+		printk("parsing Unexpected data type: %d & of len %d\n", data->type, data->data_len);
+		for(int i = 0; i < data->data_len; i++) {
+			printk("Data[%d]: %02x\n", i, data->data[i]);
+		}
+        return false;
+    }
+}
 
 static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
-			 struct net_buf_simple *ad)
+             struct net_buf_simple *ad)
 {
-	char addr_str[BT_ADDR_LE_STR_LEN];
+    char addr_str[BT_ADDR_LE_STR_LEN];
+ 
 
-	bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
+
+    bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
+
+    bt_data_parse(ad, parse_advertising_data, &name);
+
+    if (name_len > 0) {
+        printk("Name: %s\n", name);
+    }
+
+    if (manufacturer_data_len > 0) {
+        printk("Manufacturer ID: %u\n", manufacturer_id);
+        printk("Manufacturer Data: ");
+        for (int i = 0; i < manufacturer_data_len; i++) {
+            printk("%02x ", manufacturer_data[i]);
+        }
+        printk("\n");
+    }
+
 	printk("Device found: %s (RSSI %d), type %u, AD data len %u\n",
 	       addr_str, rssi, type, ad->len);
 }
+
 
 #if defined(CONFIG_BT_EXT_ADV)
 static bool data_cb(struct bt_data *data, void *user_data)
