@@ -1,0 +1,5 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.flashType": "DFU",
+  "idf.adapterTargetName": "esp32"
+}
