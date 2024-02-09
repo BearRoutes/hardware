@@ -1,0 +1,23 @@
+{
+    "nrf-connect.applications": [
+        "${workspaceFolder}/ble-observer"
+    ],
+    "files.associations": {
+        "*.cpp": "cpp",
+        "bluetooth.h": "c",
+        "uuid.h": "c",
+        "conn.h": "c",
+        "hci.h": "c",
+        "cmath": "c",
+        "compare": "c",
+        "concepts": "c",
+        "exception": "c",
+        "type_traits": "c",
+        "limits": "c",
+        "new": "c",
+        "typeinfo": "c",
+        "gap.h": "c",
+        "crypto.h": "c",
+        "addr.h": "c"
+    }
+}
