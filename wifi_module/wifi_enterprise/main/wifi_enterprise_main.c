@@ -163,7 +163,9 @@ static void wifi_enterprise_example_task(void *pvParameters)
     vTaskDelay(2000 / portTICK_PERIOD_MS);
 
     while (1) {
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
+         /* Wait until we are connected to the WiFi and have received an IP */
+        xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
+        ESP_LOGI(TAG, "Connected to AP");
 
         if (esp_netif_get_ip_info(sta_netif, &ip) == 0) {
             ESP_LOGI(TAG, "~~~~~~~~~~~");
@@ -172,8 +174,10 @@ static void wifi_enterprise_example_task(void *pvParameters)
             ESP_LOGI(TAG, "GW:"IPSTR, IP2STR(&ip.gw));
             ESP_LOGI(TAG, "~~~~~~~~~~~");
         }
-        
-        tcp_client(NULL);
+
+        tcp_client();
+        /* After TCP client operation, delay for a bit before the next operation */
+        vTaskDelay(6000 / portTICK_PERIOD_MS);
         }
 }
 
