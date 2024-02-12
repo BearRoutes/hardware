@@ -17,6 +17,7 @@
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_netif.h"
+#include "tcp_client.h"
 
 /* The examples use simple WiFi configuration that you can set via
    project configuration menu.
@@ -171,7 +172,9 @@ static void wifi_enterprise_example_task(void *pvParameters)
             ESP_LOGI(TAG, "GW:"IPSTR, IP2STR(&ip.gw));
             ESP_LOGI(TAG, "~~~~~~~~~~~");
         }
-    }
+        
+        tcp_client(NULL);
+        }
 }
 
 void app_main(void)
@@ -179,4 +182,5 @@ void app_main(void)
     ESP_ERROR_CHECK(nvs_flash_init());
     initialise_wifi();
     xTaskCreate(&wifi_enterprise_example_task, "wifi_enterprise_example_task", 4096, NULL, 5, NULL);
+
 }
