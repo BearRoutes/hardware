@@ -175,7 +175,7 @@ static void wifi_enterprise_example_task(void *pvParameters)
             ESP_LOGI(TAG, "~~~~~~~~~~~");
         }
 
-        tcp_client();
+        http_post_function();
         /* After TCP client operation, delay for a bit before the next operation */
         vTaskDelay(6000 / portTICK_PERIOD_MS);
         }

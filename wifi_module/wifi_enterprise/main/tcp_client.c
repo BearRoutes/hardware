@@ -1,62 +1,35 @@
-#include "tcp_client.h"
-#include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "lwip/sockets.h"
-#include "lwip/netdb.h"
+#include "esp_http_client.h"
 #include "esp_log.h"
 
+static const char *TAG = "HTTP_CLIENT";
 
+// Function to send HTTP POST request
+void http_post_function() {
+    char *post_data = "{\"message\": \"Hello from ESP32\"}";
+    esp_http_client_config_t config = {
+        .url = "http://172.31.63.135:5000/post-endpoint", // Update with your server's URL
+        .method = HTTP_METHOD_POST,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
 
-static const int  ip_protocol = 0;
-static const char *TAG = "TCP_CLIENT";
-typedef struct sockaddr SA;
+    // Set header for indicating content type as JSON
+    esp_http_client_set_header(client, "Content-Type", "application/json");
 
-void tcp_client(void ) {
- // create an IPv4, TCP socket file descriptor
-        int sockfd = socket(AF_INET, SOCK_STREAM, ip_protocol);
-        if (sockfd < 0) {
-            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-    	    return;
-        }
+    // Set the POST field data
+    esp_http_client_set_post_field(client, post_data, strlen(post_data));
 
-        // set up hostname
-        const char* hostname = "google.com";
-        struct hostent *host = gethostbyname(hostname);
-        if (host == NULL) {
-        	return;
-        }
+    // Perform the HTTP POST request
+    esp_err_t err = esp_http_client_perform(client);
 
-        // set up sockaddr struct with server info
-        struct sockaddr_in address;
-        address.sin_family = AF_INET; // ipv4
-        address.sin_port = htons(80); // server port, big endian
-        address.sin_addr.s_addr = *(in_addr_t*)host->h_addr; // server ip
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "HTTP POST Status = %d, content_length = %" PRId64,
+         esp_http_client_get_status_code(client),
+         esp_http_client_get_content_length(client));
 
-        // attempt to establish a connection with the server
-        // block until connection is established or an error occurs
-        // if successful, open the client fd for reading and writing
-        int err = connect(sockfd, (SA*)&address, sizeof(address));
-        if (err != 0) {
-	        ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
-    	    return;
-        }
+    } else {
+        ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
+    }
 
-        ESP_LOGI(TAG, "Successfully connected");
-
-        char* msg;
-        msg ="GET / HTTP/1.1\r\nHost: www.google.com\r\n\r\n";
-
-        send(sockfd, msg, strlen(msg), 0);
-
-        // receive response from server
-        char buffer[1024];
-        recv(sockfd, buffer, 1024, 0);
-        ESP_LOGI(TAG, "Response was: %s\r\n", buffer);
-        vTaskDelay(pdMS_TO_TICKS(3000));
-
-        if (sockfd != -1) {
-            ESP_LOGE(TAG, "Shutting down socket and restarting...");
-            shutdown(sockfd, 0);
-            close(sockfd);
-	    }
+    // Cleanup after the request
+    esp_http_client_cleanup(client);
 }
