@@ -8,78 +8,40 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
-#include <zephyr/bluetooth/conn.h>
-#include <zephyr/sys/byteorder.h> // Include this if sys_get_le16 is declared here
 
 #define NAME_LEN 30
-static uint16_t manufacturer_id = 0;
-static uint8_t manufacturer_data_len = 0;
-static const uint8_t *manufacturer_data = NULL;
-static char name[NAME_LEN] = {0}; // Ensure the name is initialized to prevent undefined behavior.
 
-const char* get_manufacturer_name(uint16_t manufacturer_id) {
-    switch (manufacturer_id) {
-    case 76:
-        return "Apple";
-    case 734:
-    case 117:
-        return "Samsung";
-    case 224:
-        return "Google";
-    default:
-        return "Unknown";
-    }
-}
-
-
-static bool parse_advertising_data(struct bt_data *data, void *user_data)
+static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
+			 struct net_buf_simple *ad)
 {
-    switch (data->type) {
-    case BT_DATA_NAME_COMPLETE:
-    case BT_DATA_NAME_SHORTENED:
-        // Ensure not to overflow the name buffer
-        size_t copy_len = MIN(data->data_len, NAME_LEN - 1);
-        memcpy(name, data->data, copy_len);
-        name[copy_len] = '\0';
-        return true;
-    case BT_DATA_MANUFACTURER_DATA:
-        if (data->data_len >= 2) {
-            manufacturer_id = sys_get_le16(data->data);
-            manufacturer_data = &data->data[2];
-            manufacturer_data_len = data->data_len - 2;
-        }
-        return true;
-    default:
-        return false;
-    }
+	char addr_str[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
+
+	uint8_t len = net_buf_simple_pull_u8(ad);
+	if (len == 0) {
+		// Incorrect formatting of advertising data
+		return true;
+	}
+
+	uint8_t data_type = net_buf_simple_pull_u8(ad);
+	len--;
+
+	if (data_type == BT_DATA_MANUFACTURER_DATA) {
+		uint16_t company_id = net_buf_simple_pull_le16(ad);
+
+		if (company_id == 0x004C) {
+			// This is an Apple device, proceed accordingly
+			printf("APPLE Device found\n");
+			// Implement further processing here
+			printk("Device found: %s (RSSI %d), type %u, AD data len %u\n",
+	       addr_str, rssi, type, ad->len);
+		}
+	}
+
+
+
 }
-
-static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type, struct net_buf_simple *ad)
-{
-    char addr_str[BT_ADDR_LE_STR_LEN];
-    bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
-
-    // Reset name and manufacturer data before parsing to avoid displaying stale information.
-    memset(name, 0, sizeof(name));
-    manufacturer_id = 0;
-    manufacturer_data_len = 0;
-    manufacturer_data = NULL;
-
-    bt_data_parse(ad, parse_advertising_data, NULL);
-
-    // printk("Device found: %s (RSSI %d)\n", addr_str, rssi);
-    if (name[0] != '\0') { // Check if the name was found
-        printk("Name: %s\n", name);
-    }
-
-    if (manufacturer_id != 0 && manufacturer_data_len > 0) {
-        const char* manufacturer_name = get_manufacturer_name(manufacturer_id);
-		printk("Manufacturer ID: %u device name (%s)   Device address: %s (RSSI %d)\n", manufacturer_id, manufacturer_name, addr_str, rssi);
-        
-    }
-}
-
-
 
 #if defined(CONFIG_BT_EXT_ADV)
 static bool data_cb(struct bt_data *data, void *user_data)
@@ -151,8 +113,10 @@ int observer_start(void)
 	struct bt_le_scan_param scan_param = {
 		.type       = BT_LE_SCAN_TYPE_PASSIVE,
 		.options    = BT_LE_SCAN_OPT_FILTER_DUPLICATE,
-		.interval   = BT_GAP_SCAN_FAST_INTERVAL,
-		.window     = BT_GAP_SCAN_FAST_WINDOW,
+		.interval   = 0X1000, //60 * 0.625ms = 37.5ms was: BT_GAP_SCAN_FAST_INTERVAL,
+		.window     = 0X0060, //60 * 0.625ms = 37.5ms was:BT_GAP_SCAN_FAST_WINDOW,
+
+		//Higher interval than window helps reduce power consumption, Lower interval than window improves scanning
 	};
 	int err;
 
