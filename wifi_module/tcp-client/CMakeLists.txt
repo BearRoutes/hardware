@@ -11,4 +11,4 @@ endif()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
-project(tcp_client)
+project(tcp-client)
