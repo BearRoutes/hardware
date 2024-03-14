@@ -24,6 +24,10 @@
 
 #define PORT CONFIG_EXAMPLE_PORT
 
+
+// Declare uartQueue as an extern variable to gain access
+extern QueueHandle_t uartQueue;
+
 static const char *TAG = "example";
 static const char *payload = "Message from ESP32 ";
 
@@ -47,14 +51,14 @@ void tcp_client(void)
         struct sockaddr_storage dest_addr = { 0 };
         ESP_ERROR_CHECK(get_addr_from_stdin(PORT, SOCK_STREAM, &ip_protocol, &addr_family, &dest_addr));
 #endif
-
+        // Create socket
         int sock =  socket(addr_family, SOCK_STREAM, ip_protocol);
         if (sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
             break;
         }
         ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT);
-
+        // Connect to server
         int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
         if (err != 0) {
             ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
@@ -62,24 +66,21 @@ void tcp_client(void)
         }
         ESP_LOGI(TAG, "Successfully connected");
 
+        // Send data to the server
+        uint8_t *data_to_send;
         while (1) {
-            int err = send(sock, payload, strlen(payload), 0);
-            if (err < 0) {
-                ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-                break;
-            }
 
-            int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-            // Error occurred during receiving
-            if (len < 0) {
-                ESP_LOGE(TAG, "recv failed: errno %d", errno);
-                break;
-            }
-            // Data received
-            else {
-                rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string
-                ESP_LOGI(TAG, "Received %d bytes from %s:", len, host_ip);
-                ESP_LOGI(TAG, "%s", rx_buffer);
+            if (xQueueReceive(uartQueue, &(data_to_send), portMAX_DELAY)) {
+                // Wait for data from UART queue
+                int err = send(sock, data_to_send, strlen((char *)data_to_send), 0);
+                if (err < 0) {
+                    ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                    break;
+                }
+                
+                 // Free the dynamically allocated memory after sending
+                free(data_to_send);
+              
             }
         }
 
