@@ -12,5 +12,12 @@
         "target/esp32.cfg"
     ],
     "idf.pythonBinPath": "/home/aziz/.espressif/python_env/idf5.1_py3.10_env/bin/python",
-    "idf.toolsPath": "/home/aziz/.espressif"
+    "idf.toolsPath": "/home/aziz/.espressif",
+    "files.associations": {
+        "*.cpp": "cpp",
+        "freertos.h": "c",
+        "queue.h": "c",
+        "nvs_flash.h": "c",
+        "esp_netif.h": "c"
+    }
 }
