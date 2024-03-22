@@ -6,7 +6,11 @@
 
 #include <zephyr/sys/printk.h>
 #include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/uart.h>
 
+#include <string.h>
 int observer_start(void);
 
 int main(void)

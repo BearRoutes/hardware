@@ -1,21 +1,37 @@
-/*
- * Copyright (c) 2022 Nordic Semiconductor ASA
- * Copyright (c) 2015-2016 Intel Corporation
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 #include <zephyr/sys/printk.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/sys/byteorder.h> // Include this if sys_get_le16 is declared here
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/uart.h>
+
+#include <string.h>
+
+static const struct device *const uart_dev = DEVICE_DT_GET(DT_NODELABEL(uart0));
+
+char tx_buffer[128];
+
+
 
 #define NAME_LEN 30
 static uint16_t manufacturer_id = 0;
 static uint8_t manufacturer_data_len = 0;
 static const uint8_t *manufacturer_data = NULL;
 static char name[NAME_LEN] = {0}; // Ensure the name is initialized to prevent undefined behavior.
+
+/*
+ * Print a null-terminated string character by character to the UART interface
+ */
+void print_uart(char *buf)
+{
+	int msg_len = strlen(buf);
+
+	for (int i = 0; i < msg_len; i++) {
+		uart_poll_out(uart_dev, buf[i]);
+	}
+}
 
 const char* get_manufacturer_name(uint16_t manufacturer_id) {
     switch (manufacturer_id) {
@@ -30,7 +46,6 @@ const char* get_manufacturer_name(uint16_t manufacturer_id) {
         return "Unknown";
     }
 }
-
 
 static bool parse_advertising_data(struct bt_data *data, void *user_data)
 {
@@ -68,17 +83,14 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type, st
     bt_data_parse(ad, parse_advertising_data, NULL);
 
     // printk("Device found: %s (RSSI %d)\n", addr_str, rssi);
-    if (name[0] != '\0') { // Check if the name was found
-        printk("Name: %s\n", name);
-    }
-
     if (manufacturer_id != 0 && manufacturer_data_len > 0) {
         const char* manufacturer_name = get_manufacturer_name(manufacturer_id);
-		printk("Manufacturer ID: %u device name (%s)   Device address: %s (RSSI %d)\n", manufacturer_id, manufacturer_name, addr_str, rssi);
-        
+
+		memset(tx_buffer, 0, sizeof(tx_buffer));
+		snprintf(tx_buffer, sizeof(tx_buffer), "Manufacturer ID: %u device name (%s)  address: %s (RSSI %d)\n", manufacturer_id, manufacturer_name, addr_str, rssi);
+		print_uart(tx_buffer);
     }
 }
-
 
 
 #if defined(CONFIG_BT_EXT_ADV)
@@ -148,6 +160,13 @@ static struct bt_le_scan_cb scan_callbacks = {
 
 int observer_start(void)
 {
+
+
+	if (!device_is_ready(uart_dev)) {
+		return 0;
+	}
+
+
 	struct bt_le_scan_param scan_param = {
 		.type       = BT_LE_SCAN_TYPE_PASSIVE,
 		.options    = BT_LE_SCAN_OPT_FILTER_DUPLICATE,
@@ -163,10 +182,9 @@ int observer_start(void)
 
 	err = bt_le_scan_start(&scan_param, device_found);
 	if (err) {
-		printk("Start scanning failed (err %d)\n", err);
+		//print_uart("Start scanning failed (err %d)\n", err);
 		return err;
 	}
-	printk("Started scanning...\n");
 
 	return 0;
 }

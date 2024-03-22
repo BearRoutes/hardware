@@ -1,0 +1,7 @@
+# editors
+*.swp
+*~
+
+# build personal testing files 
+/uart_echo/
+/echo_bot/

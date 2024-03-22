@@ -55,36 +55,46 @@ void app_main(void)
      // Create a queue capable of containing pointers to uint8_t arrays (messages)
     uartQueue = xQueueCreate(20, sizeof(uint8_t *));
 
-    // Start UART task
-    xTaskCreate(uart_task, "uart_task", 2048, NULL, 10, NULL);
     // Start TCP task
     xTaskCreate(tcp_client, "tcp_task", 4096, NULL, 5, NULL);
+    // Start UART task
+    xTaskCreate(uart_task, "uart_task", 2048, NULL, 10, NULL);
 }
 
 
 
 // UART reading task
 void uart_task(void *pvParameters) {
-    const int uart_num = UART_NUM_1;
+    const int uart_num = 2;
     uart_config_t uart_config = {
         .baud_rate = 115200,
         .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
+        .parity    = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
     };
+    ESP_ERROR_CHECK(uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
+    //using default pins for UART2 rx 16 and tx 17
+    ESP_ERROR_CHECK(uart_set_pin(uart_num, 17, 16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
-    uart_param_config(uart_num, &uart_config);
-    uart_driver_install(uart_num, BUF_SIZE * 2, 0, 0, NULL, 0);
 
-    // Configure a temporary buffer for the incoming data
-    uint8_t *data = (uint8_t *)malloc(BUF_SIZE);
+
     while (true) {
-        int len = uart_read_bytes(uart_num, data, BUF_SIZE, pdMS_TO_TICKS(20));
+        uint8_t *data = (uint8_t *)malloc(BUF_SIZE); // Allocate a new buffer for each iteration
+        if (data == NULL) {
+            ESP_LOGE(TAG, "Failed to allocate memory for UART data");
+            continue;
+        }
+
+        int len = uart_read_bytes(uart_num, data, BUF_SIZE - 1, portMAX_DELAY); // Leave space for null-terminator
         if (len > 0) {
-            // Ideally, create a copy or use a ring buffer for the data to be sent to the queue
-            // For simplicity, we're directly sending the pointer to the data buffer
-            xQueueSend(uartQueue, (void *)&data, (TickType_t)0);
+            data[len] = '\0'; // Ensure string is null-terminated
+            ESP_LOGI(TAG, "Recv str: %s", (char *)data);
+            xQueueSend(uartQueue, &data, portMAX_DELAY); // Send the pointer to the queue
+        } else {
+            free(data); // If no data read, free the buffer immediately
         }
     }
 }
@@ -128,12 +138,16 @@ void tcp_client(void *pvParameters)
                 // Wait for data from UART queue
                 int err = send(sock, data_to_send, strlen((char *)data_to_send), 0);
                 if (err < 0) {
+                    free(data_to_send); // Free the memory to avoid leaks
+                    data_to_send = NULL; // Nullify the pointer to avoid dangling reference
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
                     break;
                 }
                 
                  // Free the dynamically allocated memory after sending
                 free(data_to_send);
+                data_to_send = NULL; // Nullify the pointer after freeing
+
               
             }
         }
